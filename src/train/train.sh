@@ -7,7 +7,7 @@ cd "$PROJECT_ROOT"
 echo "Switched to directory: $PROJECT_ROOT"
 
 CONFIG_PATH="src/train/config/config.yaml"
-OUTPUT_DIR="./checkpoints/PanoVLN"
+OUTPUT_DIR="./outputs/train"
 GPU_DEVICES="0,1,2,3,4,5,6,7"
 GPU_NUM="$(awk -F',' '{print NF}' <<< "$GPU_DEVICES")"
 MASTER_ADDR="127.0.0.1"
