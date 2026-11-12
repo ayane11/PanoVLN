@@ -1,0 +1,381 @@
+{
+  "reference": "SimpleVLN/RL/recipe/vln_simplevln/run_dapo.sh (qwen35_4b effective defaults)",
+  "default_execution": "resident; physical GPUs4/3/5/6, budgets34/26/26/26GiB; manual user launch",
+  "excluded": [
+    "vLLM engine",
+    "vLLM TP/cache/prefix/eager and memory-utilization options"
+  ],
+  "items": {
+    "rollout_scheduler": {
+      "implemented": [
+        "sliding",
+        "window"
+      ],
+      "default_window": 1,
+      "source_window": 48,
+      "verified": "CPU dispatch/order/cancellation; Habitat scale still pending",
+      "source_environment_pool": "Separate parameter: env_server.launch default pool_size1; README example8. Source rollout.agent.num_workers48 and rollout_window48 do not imply48 Habitat instances.",
+      "resource_note": "Client reset timeout600s:48 pending rollouts with a pool of1 can time out even if each episode works. A pool of8 (source README example) is a concrete next resource-validation candidate, not yet measured here."
+    },
+    "native_batch_generation": {
+      "implemented": true,
+      "default_batch": 1,
+      "verified": "GPU4/3 phase probe batch2, EOS/probability mapping tests",
+      "next_validation": "Joint window48 / environment pool8 / native inference batch>1; distinct knobs, verify GPU/host resource limits and no dropped sessions.",
+      "execution": "Single dedicated executor thread, nonblocking async wait, CUDA device explicit, cancellation joins running forward before unload; runtime batch histogram collected"
+    },
+    "ppo_microbatch": {
+      "implemented": true,
+      "current_default": 4,
+      "source_qwen35_4b": 4,
+      "verified": "BF16 actual FSDP microbatch4 completed within memory budget but failed serial parity; FP32 batch2 parity passed. Source4 not accepted.",
+      "acceptance": "Configured to source4/8 after user steering. Real-model synthetic FSDP execution fits memory; strict legacy serial parity failed, retained as diagnostic only. Real Habitat/optimizer4/8 integration pending."
+    },
+    "logprob_microbatch": {
+      "implemented": true,
+      "current_default": 8,
+      "source_qwen35_4b": 8,
+      "verified": "BF16 actual FSDP batch8 completed but max logprob difference0.135666 vs serial; not accepted.",
+      "acceptance": "Configured to source4/8 after user steering. Real-model synthetic FSDP execution fits memory; strict legacy serial parity failed, retained as diagnostic only. Real Habitat/optimizer4/8 integration pending."
+    },
+    "fsdp": {
+      "full_shard": "3-GPU FP32 gradients and 2-GPU BF16 Adam verified",
+      "hybrid_shard": "construction tests only; GPU pending",
+      "size": "-1 uses all selected GPUs"
+    },
+    "gradient_checkpointing": {
+      "configurable": true,
+      "enabled": true,
+      "verified": "real-model BF16 updates"
+    },
+    "parameter_offload": {
+      "configurable": true,
+      "verified": "Synthetic GPU roundtrip and real Habitat first update -> full-state sync -> v1 collection passed"
+    },
+    "optimizer_offload": {
+      "configurable": true,
+      "modes": [
+        "bulk",
+        "parameter"
+      ],
+      "verified": "parameter: CPU exact equivalence + two-GPU real Adam steps 1/2",
+      "checkpoint": "PASS five-update save, full audit, independent restore and Adam step6"
+    },
+    "use_remove_padding": {
+      "source_qwen35_default": false,
+      "current": false,
+      "verified": "padded batch2 FP32 full-gradient test"
+    },
+    "entropy_compile": {
+      "default": true,
+      "scope": "entropy function only",
+      "verified": "dispatch/formula CPU tests; source entropy_coeff=0 so default training does not execute entropy"
+    },
+    "cuda_runtime": {
+      "allocator": "expandable_segments:True",
+      "max_connections": 16,
+      "verified": "launcher exports inherited env; no end-to-end speed claim"
+    },
+    "save_freq": {
+      "source": 5,
+      "resident": 5,
+      "legacy": 1,
+      "verified": "PASS five real updates then export/audit; independent restore and next update/export/audit",
+      "formal_launcher": "5 updates; KEEP_LAST=0 retains all formal checkpoints by default"
+    },
+    "continuous_controller": {
+      "resident_flag": true,
+      "resource_gates": true,
+      "isolated_runtime": true,
+      "offline_wandb": true,
+      "retention": true,
+      "verified": "15 controller tests; real Habitat first504-decision update/4Adam steps and in-memory v1 sampling roundtrip verified; second update/final export pending",
+      "per_rank_memory_limits": "Resident --memory-limits-gib in --gpus order; preflight and worker use same values; CPU boundary and pass-through tests passed",
+      "phase_timing": "Implemented phase_metrics.jsonl collection/update/export+audit wall time and update token throughput for next runtime; current isolated pilot predates instrumentation;10 relevant CPU tests passed.",
+      "consumed_cache": "KEEP_ROLLOUTS=false now removes redundant consumed trajectory caches after successful updates, retaining last batch needed by pending export; checkpoints untouched.13 related CPU tests passed; model runtime unchanged."
+    },
+    "attention_backend": {
+      "configured": "auto selects FA2 for BF16 and SDPA for FP32; explicit override propagated through controller/legacy wrapper/resident/collection/FSDP",
+      "launcher_default": "flash_attention_2",
+      "verified": "128 RL CPU tests passed; real BF16 FA2 collection/update integration pending",
+      "active_pilot": "isolated old SDPA runtime unchanged"
+    },
+    "effective_optimizer_minibatch": {
+      "source": 1024,
+      "launcher_default": 1024,
+      "active_runtime_pilot": 128,
+      "status": "New-run default corrected; existing checkpoint continuation must preserve original hyperparameters"
+    }
+  },
+  "evidence": {
+    "full_cpu_tests": 133,
+    "controller_cpu_tests": 15,
+    "fp32_fsdp_gradient": "outputs/acceleration_validation/fsdp_batch_fp32_3gpu_02.json",
+    "bf16_phase_adam": "outputs/acceleration_validation/resident_phase_43_parameter_01_rank*.json",
+    "checkpoint_test_log": "/tmp/panovln_resident_save_43_01.log",
+    "checkpoint_test_state": "PASS: independent restore exact cursor/CPU-CUDA-Python RNG; Adam step5->6 both ranks; full v6 tensor audit, phase sync and generation passed; process exit0. Disposable checkpoints removed.",
+    "checkpoint_audit": "outputs/acceleration_validation/resident_save_restore_43_01/audit_v5.json",
+    "checkpoint_restore_log": "/tmp/panovln_resident_restore_43_01.log",
+    "targeted_resume_retention_tests": 21,
+    "checkpoint_restore_reports": "outputs/acceleration_validation/resident_restore_43_01_rank*.json",
+    "checkpoint_restore_audit": "outputs/acceleration_validation/resident_restore_43_01/audit_v6.json",
+    "bf16_source_batch": "outputs/acceleration_validation/fsdp_bf16_micro4_log8_43_02.json",
+    "bf16_gradient_diagnostics": {
+      "source": "outputs/acceleration_validation/fsdp_bf16_micro4_log8_43_03.json",
+      "groups": {
+        "vision": {
+          "reference_squared_norm": 13290.52594879079,
+          "actual_squared_norm": 14440.725200366503,
+          "error_squared_norm": 192.18446381835022,
+          "dot": 13769.533342669474,
+          "elements": 333514240,
+          "sign_disagreements": 13179820,
+          "relative_l2": 0.12025082216099961,
+          "cosine": 0.9939250500501715
+        },
+        "language_or_fusion": {
+          "reference_squared_norm": 22305.221820171526,
+          "actual_squared_norm": 22181.110830305,
+          "error_squared_norm": 49.408227766340744,
+          "dot": 22218.462211355105,
+          "elements": 4249800192,
+          "sign_disagreements": 79001963,
+          "relative_l2": 0.04706481597361416,
+          "cosine": 0.9988932490166454
+        }
+      }
+    },
+    "bf16_repeat_control": "outputs/acceleration_validation/fsdp_bf16_micro4_log8_repeat_43_04.json",
+    "habitat_pilot_root": "outputs/acceleration_validation/resident_habitat_controller_43_01",
+    "direct_source_ppo_audit": "outputs/acceleration_validation/source_ppo_semantics.json",
+    "habitat_first_collection": {
+      "sampled_groups": 4,
+      "filtered_groups": 1,
+      "discarded_valid_groups": 1,
+      "valid_groups": 2,
+      "generation_batches": 2
+    },
+    "real_habitat_first_optimizer_step": {
+      "both_ranks": true,
+      "rows": [
+        0,
+        128
+      ],
+      "gradient_norm": 3.2096996307373047,
+      "runtime": "isolated SDPA, minibatch128, PPOmicro4/logprob8, parameter Adam offload",
+      "limit": "Does not validate new FA2/1024 configuration or gains."
+    },
+    "real_habitat_optimizer_steps": {
+      "completed_minibatches": [
+        [
+          0,
+          128
+        ],
+        [
+          128,
+          256
+        ],
+        [
+          256,
+          384
+        ],
+        [
+          384,
+          504
+        ]
+      ],
+      "gradient_norms": [
+        3.2096996307373047,
+        1.4848376512527466,
+        4.394033908843994,
+        1.1499388217926025
+      ],
+      "both_ranks": true,
+      "policy_update_not_yet_complete": false
+    },
+    "real_habitat_phase_roundtrip": {
+      "first_policy_version": 0,
+      "next_policy_version": 1,
+      "first_update_decisions": 504,
+      "first_update_optimizer_steps": 4,
+      "new_collection": "collection_v1_1794393406697192167",
+      "checkpoint_reload_between_rounds": false,
+      "scope": "Isolated SDPA/minibatch128 runtime, not new source-aligned FA2 configuration"
+    },
+    "real_habitat_second_collection": {
+      "trajectories": 16,
+      "decisions": 204,
+      "sampled_groups": 2,
+      "valid_groups": 2,
+      "elapsed_seconds": 286.8272132589482
+    },
+    "real_habitat_second_update": {
+      "completed_minibatches": [
+        [
+          0,
+          128
+        ],
+        [
+          128,
+          204
+        ]
+      ],
+      "gradient_norms": [
+        3.515488624572754,
+        2.4870662689208984
+      ],
+      "cumulative_optimizer_steps_so_far": 6,
+      "both_ranks": true
+    },
+    "real_habitat_pilot_complete": {
+      "policy_version": 2,
+      "optimizer_steps": 6,
+      "audit": "outputs/acceleration_validation/resident_habitat_controller_43_01/resident/audit_v2.json",
+      "checkpoint_cleanup": "completed, compact progress and audit retained"
+    },
+    "joint_retest03_reset_failures": {
+      "observed": 13,
+      "cause": "HTTP503 after source600s reset wait deadline",
+      "interpretation": "Expected source fault-isolation path, not whole-batch failure; no ReadError observed since async fix at this observation."
+    },
+    "joint_first_collection": {
+      "decisions": 365,
+      "failed_reset_503": 13,
+      "inference_calls": 300,
+      "inference_max_batch": 5,
+      "inference_mean_batch": 3.0933333333333333,
+      "collection_wall_seconds": 809.0717284400016
+    },
+    "source_aligned_first_update": {
+      "metrics": "outputs/acceleration_validation/resident_source_controller_43_03/resident/update_v1.json",
+      "policy_version": 1,
+      "decisions": 365,
+      "optimizer_steps": 1,
+      "gradient_norm": 1.5592862367630005,
+      "update_wall_seconds": 847.3089732729131
+    }
+  },
+  "evaluation": {
+    "r2r_episodes": 1839,
+    "baseline_sr": 0.756389342033714,
+    "round1_sr": 0.7525829255029908,
+    "new_success": 40,
+    "lost_success": 47,
+    "claim": "No improvement established; historical candidate protocol still needs full verification; no new RxR candidate",
+    "baseline_environment_note": "Historical base eval.log reports Qwen fast path unavailable, torch fallback; current RL binds FLA. Before attributing a candidate score change to RL, verify/evaluate base and candidate under matched evaluation environment/kernel/protocol."
+  },
+  "remaining": [],
+  "validation_cleanup": {
+    "policy": "Only delete disposable checkpoints/files generated by this adaptation validation after their final dependent experiment. Do not delete anything else, including other old experiments, formal checkpoints, datasets or evaluation outputs. Preserve compact diagnostic evidence.",
+    "pending": [],
+    "completed": "Removed synthetic v5/v6 model+optimizer and batch payloads, and obsolete interrupted continuous_main trajectory files. Free disk rose from106GiB to218GiB; compact reports retained.",
+    "last_cleanup": "manual_launch_cleanup.json: only payloads inside three known validation roots; compact logs/metrics/audits retained"
+  },
+  "next_authorized_gpu_task": {
+    "gpus": [
+      4,
+      3
+    ],
+    "memory_limits_gib": [
+      36,
+      26.5
+    ],
+    "task": "Joint source-aligned FA2/1024/window48/pool8/nativebatch8 validation",
+    "prerequisite": "Finish current restore/export/audit; delete disposable validation checkpoints; recheck free memory",
+    "probe": "scripts/continuous_rl.py --resident",
+    "status": "STOPPED at explicit user request; no further validation launched. First FA2 update passed; second collection interrupted; no full four-GPU runtime claim.",
+    "actual_memory_limits_gib": [
+      34,
+      26
+    ]
+  },
+  "acceptance_policy": "User steering: reproduce SimpleVLN training semantics and evaluation outcome; legacy serial gradients are not a correctness oracle. BF16 serial/batch parity reports are diagnostics, not rollout-blocking gates. Fix demonstrated logic errors; validate real training, throughput and evaluation.",
+  "source_logic_audit": {
+    "ppo": "dual-clip formula matches core_algos.compute_policy_loss_vanilla",
+    "normalization": "micro numerator * DP world / global valid response tokens matches agg_loss(token-mean)",
+    "old_logprob": "recomputed before updates, matching ray_trainer._compute_old_log_prob",
+    "removed_overhead": "Pano-only duplicate train/eval forward and exact comparison removed; finite-value check kept",
+    "limits": "This is a targeted audit, not proof of all rollout/reward semantics or gains.",
+    "direct_execution": "PASS24 CPU cases using actual SimpleVLN source functions; max loss difference4.44e-16, gradient5.55e-17",
+    "effective_minibatch": {
+      "source": "ray_trainer._update_actor multiplies128 by rollout_n8; batch_utils.padding_multiple confirms1024",
+      "previous_pano_default": 128,
+      "new_launcher_default": 1024,
+      "active_pilot": "keeps isolated128 configuration for runtime validation; cannot claim full source hyperparameter alignment",
+      "existing_rl_checkpoint": "Do not change minibatch on resume; use new run from base for source-aligned training"
+    },
+    "training_limits": {
+      "source": {
+        "prompt_tokens": 4096,
+        "response_tokens": 256,
+        "env_steps": 200,
+        "decisions": 64
+      },
+      "new_run_defaults": "aligned; source verl_agent_loop passes no episode length override",
+      "active_pilot": "isolated legacy64 response/500env/500decisions unchanged",
+      "truncation": "episode cap returns actual terminal success metric; not removed from sampling",
+      "evaluation": "unchanged; training protocol aligned separately",
+      "tests": "128 RL CPU and15 controller CPU passed"
+    },
+    "rollout_failure_policy": "Source sliding isolates episode exceptions, logs and drops failed trajectories; partial groups use actual surviving trajectories; all-failed raises; window retains strict failure propagation. Actions are never retried.",
+    "reset_503_policy": "User confirmed exact source handling: reuse source VLNEnv600s reset retries; timeout isolates/drops episode in sliding manager. No additional local admission semaphore. Never retry action step."
+  },
+  "resource_authorization": "Continue current validation on physical GPU3/4; ask user before formal training.",
+  "next_validation_configuration": {
+    "worker_config": ".codex/dapo/resident_source_aligned_pilot_43.json",
+    "controller_env_pool_size": 8,
+    "gpus": [
+      4,
+      3
+    ],
+    "memory_limits_gib": [
+      36,
+      26
+    ],
+    "state": "Prepared, not launched; current two-round pilot still running. Only GPU3/4 for validation; formal training needs user confirmation.",
+    "scope": "2-round integration validation; formal training requires user confirmation",
+    "coverage": "6generation groups \u00d78trajectories =48rollout jobs; window48, environment pool8, inference batch8. Target2valid groups validates integration, not source training batch128."
+  },
+  "completion_scope": "Latest user request: stop validation, delete its disposable data only, configure manual formal launch on GPU3/4/5/6, check available VRAM. Do not launch formal experiment.",
+  "pending_user_decision": {
+    "resolved": "User authorized follow SimpleVLN method",
+    "applied": true,
+    "implementation": "One native executor thread (nonblocking await, CUDA device explicit, cancellation joins forward); source sliding per-episode failure isolation; all-failed guard; no action retries",
+    "verification": "133 RL CPU tests passed; joint GPU3/4 retest running"
+  },
+  "four_gpu_preflight": {
+    "free_MiB": {
+      "3": 30486,
+      "4": 48497,
+      "5": 30506,
+      "6": 30614
+    },
+    "rank_order": [
+      4,
+      3,
+      5,
+      6
+    ],
+    "memory_limits_GiB": [
+      34,
+      26,
+      26,
+      26
+    ],
+    "assessment": "All meet configured process budget plus3GiB headroom now;4-way FSDP reduces shard size. Full4-GPU run not executed; startup rechecks."
+  },
+  "current_manual_launcher": {
+    "gpus": [
+      4,
+      3
+    ],
+    "memory_limits_GiB": [
+      34,
+      26
+    ],
+    "run_name": "continuous_bf16_aligned_2gpu",
+    "reason": "User requested GPU3/4 after four-card run stopped; GPUs5/6 now have only~5GiB free",
+    "four_card_failure": "SIGTERM recorded, not an explicit OOM; sender not identified",
+    "old_formal_data": "preserved"
+  }
+}

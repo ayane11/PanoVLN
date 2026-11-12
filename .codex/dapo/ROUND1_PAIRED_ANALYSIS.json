@@ -1,0 +1,57 @@
+{
+  "matched_episodes": 1839,
+  "metrics": {
+    "success": {
+      "delta": -0.0038064165307232192,
+      "paired_normal_95ci": [
+        -0.013748686807326707,
+        0.006135853745880269
+      ]
+    },
+    "spl": {
+      "delta": -0.0043449279838870675,
+      "paired_normal_95ci": [
+        -0.01216426787135391,
+        0.0034744119035797754
+      ]
+    },
+    "oracle_success": {
+      "delta": -0.000543773790103317,
+      "paired_normal_95ci": [
+        -0.009526744104307342,
+        0.008439196524100709
+      ]
+    },
+    "distance_to_goal": {
+      "delta": -0.01795518365215111,
+      "paired_normal_95ci": [
+        -0.1427336584342505,
+        0.10682329112994828
+      ]
+    },
+    "path_length": {
+      "delta": 0.13388873214979355,
+      "paired_normal_95ci": [
+        -0.06642897314707077,
+        0.3342064374466579
+      ]
+    },
+    "ndtw": {
+      "delta": -0.0010082901495803806,
+      "paired_normal_95ci": [
+        -0.005930738098766654,
+        0.003914157799605893
+      ]
+    }
+  },
+  "success_transitions": {
+    "0->0": 408,
+    "0->1": 40,
+    "1->0": 47,
+    "1->1": 1344
+  },
+  "identical_executed_actions": 973,
+  "baseline": "PanoVLN/outputs/eval/r2r_20261107_115856/result.jsonl",
+  "candidate": "PanoVLN/outputs/eval/rl_round_00001/r2r/result.jsonl",
+  "protocol_status": "Historical effective configs still need verification"
+}

@@ -1,0 +1,10 @@
+# RL additions for the cloned Conda panovln-rl environment.
+# Keep the original panovln environment unchanged.
+# pyarrow 26 requires NumPy >=2; Habitat environment currently uses NumPy 1.26.
+pyarrow==19.0.1
+pytest==9.2.0
+fastapi==0.162.2
+uvicorn==0.54.0
+starlette==1.10.0
+iniconfig==2.3.1
+pluggy==1.7.0

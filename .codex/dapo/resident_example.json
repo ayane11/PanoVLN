@@ -1,0 +1,30 @@
+{
+  "checkpoint": "/workspace/VLN/PanoVLN/checkpoints/PanoVLN",
+  "output": "/workspace/VLN/PanoVLN/outputs/dapo_resident/alignment_validation",
+  "manifest": "/data/vln/dapo/data/train.parquet",
+  "server": "http://127.0.0.1:8027",
+  "seed": 42,
+  "epochs": 20,
+  "memory_limit_gib": 28,
+  "save_freq": 5,
+  "max_updates": 0,
+  "param_offload": true,
+  "actor": {
+    "precision": "bf16",
+    "optimizer_offload": true,
+    "fsdp_size": -1,
+    "ppo_micro_batch_size": 4,
+    "log_prob_micro_batch_size": 8,
+    "mini_batch_decisions": 1024,
+    "attention_backend": "flash_attention_2",
+    "optimizer_offload_mode": "parameter"
+  },
+  "collection": {
+    "rollout_n": 8,
+    "target_groups": 128,
+    "generation_groups": 192,
+    "rollout_window": 48,
+    "inference_batch_size": 1,
+    "inference_wait_ms": 2.0
+  }
+}
