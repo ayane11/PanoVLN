@@ -416,6 +416,10 @@ class Qwen3_5ForConditionalGenerationForPanoVLN(Qwen3_5ForConditionalGeneration)
         self._pano_runtime_image_current_index = None
         self._pano_runtime_image_geometry = None
         self._pano_runtime_panovggt_pixel_values = None
+        memory_config = getattr(config, "memory_config", None)
+        if memory_config and memory_config.get("enabled", True):
+            from src.memory.integration import install_memory
+            install_memory(self, memory_config)
         self._install_image_feature_hook()
         self.register_load_state_dict_post_hook(self._load_missing_pano_parameters_post_hook)
 
@@ -770,8 +774,27 @@ class Qwen3_5ForConditionalGenerationForPanoVLN(Qwen3_5ForConditionalGeneration)
         image_num_images: torch.LongTensor | None = None,
         image_current_index: torch.LongTensor | None = None,
         panovggt_pixel_values: torch.Tensor | None = None,
+        episode_uid=None,
+        memory_steps=None,
+        current_odom=None,
+        memory_write=True,
         **kwargs,
     ):
+        if episode_uid is not None:
+            if not hasattr(self, "episode_memory"):
+                raise ValueError("Memory metadata supplied to a model without memory")
+            if input_ids is None or memory_steps is None or current_odom is None:
+                raise ValueError("Memory prefill requires IDs, physical steps and odometry")
+            batch_size = input_ids.shape[0]
+            if isinstance(episode_uid, str) or any(len(field) != batch_size for field in (episode_uid, memory_steps, current_odom)):
+                raise ValueError("Memory metadata must contain one entry per batch sample")
+            if len(set(episode_uid)) != batch_size:
+                raise ValueError("One batch cannot contain two states from the same episode")
+            if labels is not None and torch.any(labels[input_ids.eq(self.config.memory_token_id)] != -100):
+                raise ValueError("Memory placeholder labels must be masked with -100")
+            self._memory_context = dict(episodes=episode_uid, steps=memory_steps,
+                odom=current_odom, write=bool(memory_write), input_ids=input_ids,
+                image_num_images=image_num_images, image_current_index=image_current_index)
         if self._panovggt_enabled():
             self._set_runtime_pano_context(
                 image_grid_thw=image_grid_thw,
@@ -797,6 +820,7 @@ class Qwen3_5ForConditionalGenerationForPanoVLN(Qwen3_5ForConditionalGeneration)
                 **kwargs,
             )
         finally:
+            self._memory_context = None
             self._clear_runtime_pano_context()
 
     def _load_missing_pano_parameters_post_hook(self, module, incompatible_keys) -> None:
@@ -899,6 +923,10 @@ class Qwen3_5ForConditionalGenerationForPanoVLN(Qwen3_5ForConditionalGeneration)
         image_num_images=None,
         image_current_index=None,
         panovggt_pixel_values=None,
+        episode_uid=None,
+        memory_steps=None,
+        current_odom=None,
+        memory_write=True,
         **kwargs,
     ):
         model_inputs = super().prepare_inputs_for_generation(
@@ -919,7 +947,12 @@ class Qwen3_5ForConditionalGenerationForPanoVLN(Qwen3_5ForConditionalGeneration)
             panovggt_pixel_values=panovggt_pixel_values,
             **kwargs,
         )
+        if episode_uid is not None:
+            model_inputs.update(episode_uid=episode_uid, memory_steps=memory_steps,
+                current_odom=current_odom, memory_write=memory_write)
         if not is_first_iteration and use_cache:
+            for key in ("episode_uid", "memory_steps", "current_odom", "memory_write"):
+                model_inputs.pop(key, None)
             model_inputs["image_erp_geometry"] = None
             model_inputs["image_num_images"] = None
             model_inputs["image_current_index"] = None

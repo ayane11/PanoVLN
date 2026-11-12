@@ -1,0 +1,9 @@
+# @package _global_
+# Development split for memory experiments; keep final val_unseen separate.
+defaults:
+  - vln_r2r
+  - _self_
+
+habitat:
+  dataset:
+    split: val_seen

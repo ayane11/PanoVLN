@@ -640,6 +640,9 @@ class SupervisedDataset(Dataset):
             processor=self.processor,
         )
         prompt_text = prompt_and_target["prompt"]
+        if getattr(self, "memory_token_count", 0):
+            from src.memory.tokens import memory_prompt
+            prompt_text = memory_prompt(self.memory_token_count) + prompt_text
         target_text = prompt_and_target["target"]
         eos = self.tokenizer.eos_token or ""
         target_with_eos = target_text + eos

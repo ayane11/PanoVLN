@@ -476,6 +476,8 @@ def evaluate_agent(
                 iter_step += 1
                 executed_action_log.append(int(action["action"]))
                 obs = env.step(action)
+                if action["action"] != STOP_ACTION_ID:
+                    agent.executed_memory_actions.append(int(action["action"]))
 
             info = env.get_metrics()
             agent.finalize_episode()
@@ -545,10 +547,14 @@ class PanoVLN_Agent(Agent):
         model_init_kwargs["attn_implementation"] = self.attn_implementation
         model_init_kwargs['torch_dtype'] = torch.bfloat16
 
-        self.model = Qwen3_5ForConditionalGenerationForPanoVLN.from_pretrained(
-            model_path,
-            **model_init_kwargs,
-        )
+        self.processor = None
+        if (Path(model_path) / "memory_bundle.json").exists():
+            from src.memory.checkpoint import load_bundle
+            self.model, self.processor = load_bundle(model_path, self.attn_implementation)
+        else:
+            self.model = Qwen3_5ForConditionalGenerationForPanoVLN.from_pretrained(
+                model_path, **model_init_kwargs,
+            )
 
         if lora_path is not None and lora_path!= '':
             print('Loading LoRA weights...')
@@ -569,7 +575,8 @@ class PanoVLN_Agent(Agent):
         self.device = 'cuda'
         self.model.to(self.device)
         self.model = self.model.eval()
-        self.processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
+        if self.processor is None:
+            self.processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
         if hasattr(self.processor, "tokenizer") and self.processor.tokenizer.pad_token is None:
             self.processor.tokenizer.pad_token = self.processor.tokenizer.eos_token
         self.tokenizer = getattr(self.processor, "tokenizer", None)
@@ -636,7 +643,11 @@ class PanoVLN_Agent(Agent):
             VLN_ACTION_SEQUENCE_LENGTH * 2 + 4,
         )
 
-        texts = [build_eval_generation_prompt(self.processor, self.conversations)]
+        text = build_eval_generation_prompt(self.processor, self.conversations)
+        if hasattr(self.model, "episode_memory"):
+            from src.memory.tokens import memory_prompt
+            text = memory_prompt(self.model.episode_memory.latents.shape[1]) + text
+        texts = [text]
 
         prompt_inputs = self.processor(
             text=texts,
@@ -663,6 +674,11 @@ class PanoVLN_Agent(Agent):
             ).unsqueeze(0)
 
         prompt_inputs = prompt_inputs.to(self.device)
+        if hasattr(self.model, "episode_memory"):
+            from src.memory.bank import integrate_actions
+            prompt_inputs.update(episode_uid=[str(self.episode_id)],
+                memory_steps=[len(self.executed_memory_actions)],
+                current_odom=[integrate_actions(self.executed_memory_actions)], memory_write=True)
         do_sample = generation_kwargs["temperature"] > 0
         model_generation_kwargs = {
             "do_sample": do_sample,
@@ -798,6 +814,9 @@ class PanoVLN_Agent(Agent):
         self.prediction_turn_logits = None
         self.last_action = None
         self.collision_recovery.reset()
+        self.executed_memory_actions = []
+        if hasattr(self.model, "episode_memory"):
+            self.model.episode_memory.reset()
         
     def act(self, observations, info, episode_id):
 

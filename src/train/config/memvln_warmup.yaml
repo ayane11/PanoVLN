@@ -1,0 +1,45 @@
+model:
+  name_or_path: ./checkpoints/PanoVLN
+  panovggt_checkpoint_path: ./checkpoints/PanoVGGT/model.pt
+  attn_implementation: flash_attention_2
+memory:
+  enabled: true
+  feature_dim: 2560
+  bank_frames: 100
+  frame_tokens: 100
+  chunk_frames: 4
+  consolidation: frme
+  compression_layers: 2
+  retrieval_layers: 2
+  heads: 16
+  tokens: 300
+  checkpoint_blocks: true
+  use_pose: true
+  use_time: true
+data:
+  jsonl: /data/vln/train_r2r_rxr.jsonl
+  image_root: /data/vln
+  summaries: true
+  sub_summaries_jsonl: null
+training:
+  stage: warmup
+  seed: 42
+  deterministic: true
+  verify_resume_state: true
+  epochs: 1
+  episode_subset: 256
+  max_updates: 200
+  global_batch: 24
+  learning_rate: 0.0001
+  memory_learning_rate: 0.0001
+  weight_decay: 0.01
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  save_updates: 50
+  save_total_limit: 2
+  lora_rank: 32
+  lora_alpha: 64
+  cpu_offload: false
+wandb:
+  project: PanoVLN-Mem
+  mode: offline
